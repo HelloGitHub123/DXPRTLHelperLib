@@ -13,6 +13,7 @@
 + (void)load {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+		[RTLTools methodSwizzlingWithClass:self oriSEL:@selector(imageNamed:inBundle:compatibleWithTraitCollection:) swizzledSEL:@selector(RTLImageNamed:inBundle:compatibleWithTraitCollection:) isInstanceMethod:NO];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(imageNamed:) swizzledSEL:@selector(RTLImageNamed:) isInstanceMethod:NO];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(imageWithContentsOfFile:) swizzledSEL:@selector(RTLImageWithContentsOfFile:) isInstanceMethod:NO];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(initWithContentsOfFile:) swizzledSEL:@selector(initRTLWithContentsOfFile:) isInstanceMethod:YES];
@@ -47,6 +48,17 @@
                                orientation:UIImageOrientationUpMirrored];
     }
     return self;
+}
+
++ (nullable UIImage *)RTLImageNamed:(NSString *)name inBundle:(nullable NSBundle *)bundle compatibleWithTraitCollection:(nullable UITraitCollection *)traitCollection {
+	UIImage *img = [self RTLImageNamed:name inBundle:bundle compatibleWithTraitCollection:traitCollection];
+	if (img && [RTLTools canDoRTLWork] && [RTLTools evaluateImgToReverse:name]) {
+		img = [UIImage imageWithCGImage:img.CGImage
+								  scale:img.scale
+							orientation:UIImageOrientationUpMirrored];
+	}
+	return img;
+	
 }
 
 @end
