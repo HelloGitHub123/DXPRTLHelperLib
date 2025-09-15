@@ -18,15 +18,6 @@
     });
 }
 
-- (void)RTLSetLocale:(NSLocale *)locale {
-    if ([RTLTools canDoRTLWork]) {
-        locale = [[NSLocale alloc]initWithLocaleIdentifier:[RTLTools getLocale]];
-    } else {
-        
-    }
-    [self RTLSetLocale:locale];
-}
-
 - (instancetype)initRTL
 {
     self = [self initRTL];
@@ -34,11 +25,22 @@
         if ([RTLTools canDoRTLWork]) {
             NSLocale *locale = [[NSLocale alloc]initWithLocaleIdentifier:[RTLTools getLocale]];
             [self RTLSetLocale:locale];
+            [self setCalendar:[[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian]]; // 公历 不同语言环境可能日历格式不一样
+            [self setDateStyle:NSDateFormatterFullStyle]; // 详细
         } else {
             
         }
     }
     return self;
+}
+
+- (void)RTLSetLocale:(NSLocale *)locale {
+    if ([RTLTools canDoRTLWork]) {
+        locale = [[NSLocale alloc]initWithLocaleIdentifier:[RTLTools getLocale]];
+    } else {
+        
+    }
+    [self RTLSetLocale:locale];
 }
 
 @end
