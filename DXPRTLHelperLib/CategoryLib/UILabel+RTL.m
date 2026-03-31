@@ -65,6 +65,7 @@
             para.alignment = textAlignment;
             [newAttrs setValue:para forKey:NSParagraphStyleAttributeName];
         }
+        [newAttrs setValue:@[@(NSWritingDirectionRightToLeft), @(NSWritingDirectionEmbedding)] forKey:NSWritingDirectionAttributeName];
         [newAttributeText addAttributes:newAttrs range:range];
     }];
     [self RTLSetAttributedText:newAttributeText];
