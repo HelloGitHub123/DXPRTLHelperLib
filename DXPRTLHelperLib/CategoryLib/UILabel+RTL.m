@@ -7,15 +7,31 @@
 
 #import "UILabel+RTL.h"
 #import "RTLTools.h"
+#import "RTLDirectionMarks.h"
 
 @implementation UILabel (RTL)
 
 + (void)load {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(initWithFrame:) swizzledSEL:@selector(initRTLWithFrame:) isInstanceMethod:YES];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setTextAlignment:) swizzledSEL:@selector(RTLSetTextAlignment:) isInstanceMethod:YES];
+        [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setText:) swizzledSEL:@selector(RTLSetText:) isInstanceMethod:YES];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setAttributedText:) swizzledSEL:@selector(RTLSetAttributedText:) isInstanceMethod:YES];
     });
+}
+
+- (instancetype)initRTLWithFrame:(CGRect)frame
+{
+    self = [self initRTLWithFrame:frame];
+    if (self) {
+        if ([RTLTools canDoRTLWork]) {
+            self.textAlignment = NSTextAlignmentLeft;  // default
+        } else {
+//            self.textAlignment = NSTextAlignmentLeft;
+        }
+    }
+    return self;
 }
 
 - (void)RTLSetTextAlignment:(NSTextAlignment)textAlignment {
@@ -35,6 +51,14 @@
         }
     }
     [self RTLSetTextAlignment:textAlignment];
+}
+
+- (void)RTLSetText:(NSString *)text {
+    if (![RTLTools canDoRTLWork] || text.length == 0) {
+        [self RTLSetText:text];
+        return;
+    }
+    [self RTLSetText:RTL_EMBED_RTL(text)];
 }
 
 - (void)RTLSetAttributedText:(NSAttributedString *)attributedText {
@@ -65,9 +89,12 @@
             para.alignment = textAlignment;
             [newAttrs setValue:para forKey:NSParagraphStyleAttributeName];
         }
-        [newAttrs setValue:@[@(NSWritingDirectionRightToLeft), @(NSWritingDirectionEmbedding)] forKey:NSWritingDirectionAttributeName];
         [newAttributeText addAttributes:newAttrs range:range];
     }];
+    NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate];
+    [newAttributeText insertAttributedString:rtlMark atIndex:0];
+    NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+    [newAttributeText appendAttributedString:rtlEndMark];
     [self RTLSetAttributedText:newAttributeText];
 }
 

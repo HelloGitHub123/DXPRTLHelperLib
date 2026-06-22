@@ -183,4 +183,162 @@
     return [RTLConfigurationManager sharedInstance].locale;
 }
 
+#pragma mark - Helper Methods (Private)
+
+/// 判断字符是否为 RTL 字符
+/// 支持: 阿拉伯文, 希伯来文, 叙利亚文, 标记符号, N'Ko 等
++ (BOOL)isRTLCharacter:(unichar)c {
+    // 阿拉伯文: U+0600-U+06FF
+    if (c >= 0x0600 && c <= 0x06FF) {
+        return YES;
+    }
+
+    // 希伯来文: U+0590-U+05FF
+    if (c >= 0x0590 && c <= 0x05FF) {
+        return YES;
+    }
+
+    // 叙利亚文: U+0700-U+074F
+    if (c >= 0x0700 && c <= 0x074F) {
+        return YES;
+    }
+
+    // 标记符号 (Thaana): U+0780-U+07BF
+    if (c >= 0x0780 && c <= 0x07BF) {
+        return YES;
+    }
+
+    // N'Ko: U+07C0-U+07FF
+    if (c >= 0x07C0 && c <= 0x07FF) {
+        return YES;
+    }
+
+    // Samaritan: U+0800-U+083F
+    if (c >= 0x0800 && c <= 0x083F) {
+        return YES;
+    }
+
+    // Mandaic: U+0840-U+085F
+    if (c >= 0x0840 && c <= 0x085F) {
+        return YES;
+    }
+
+    return NO;
+}
+
+/// 判断字符是否为 LTR 字符（英文或数字）
++ (BOOL)isLTRCharacter:(unichar)c {
+    // 英文大写: U+0041-U+005A (A-Z)
+    if (c >= 0x0041 && c <= 0x005A) {
+        return YES;
+    }
+
+    // 英文小写: U+0061-U+007A (a-z)
+    if (c >= 0x0061 && c <= 0x007A) {
+        return YES;
+    }
+
+    return NO;
+}
+
+#pragma mark - Text Direction Detection
+
++ (BOOL)isStartingWithRTL:(NSString *)text {
+    if (!text || text.length == 0) {
+        return NO;
+    }
+
+    // 遍历字符串，找到第一个有方向属性的字符
+    for (NSInteger i = 0; i < text.length; i++) {
+        unichar c = [text characterAtIndex:i];
+
+        // 检查是否为 RTL 字符
+        if ([self isRTLCharacter:c]) {
+            return YES;
+        }
+
+        // 检查是否为 LTR 字符
+        if ([self isLTRCharacter:c]) {
+            return NO;
+        }
+    }
+
+    return NO;
+}
+
++ (BOOL)isStartingWithLTR:(NSString *)text {
+    if (!text || text.length == 0) {
+        return NO;
+    }
+
+    // 遍历字符串，找到第一个有方向属性的字符
+    for (NSInteger i = 0; i < text.length; i++) {
+        unichar c = [text characterAtIndex:i];
+
+        // 检查是否为 LTR 字符
+        if ([self isLTRCharacter:c]) {
+            return YES;
+        }
+
+        // 检查是否为 RTL 字符
+        if ([self isRTLCharacter:c]) {
+            return NO;
+        }
+    }
+
+    return NO;
+}
+
++ (BOOL)isAllRTL:(NSString *)text {
+    if (!text || text.length == 0) {
+        return NO;
+    }
+
+    BOOL hasRTLCharacter = NO;
+
+    // 检查所有字符是否都是 RTL 或中性字符
+    for (NSInteger i = 0; i < text.length; i++) {
+        unichar c = [text characterAtIndex:i];
+
+        // 如果遇到 LTR 字符，则不是全部 RTL
+        if ([self isLTRCharacter:c]) {
+            return NO;
+        }
+
+        // 检查是否为 RTL 字符
+        if ([self isRTLCharacter:c]) {
+            hasRTLCharacter = YES;
+        }
+        // 允许数字、空格、标点等中性字符
+    }
+
+    return hasRTLCharacter;
+}
+
++ (BOOL)isAllLTR:(NSString *)text {
+    if (!text || text.length == 0) {
+        return NO;
+    }
+
+    BOOL hasLTRCharacter = NO;
+
+    // 检查所有字符是否都是 LTR 或中性字符
+    for (NSInteger i = 0; i < text.length; i++) {
+        unichar c = [text characterAtIndex:i];
+
+        // 如果遇到 RTL 字符，则不是全部 LTR
+        if ([self isRTLCharacter:c]) {
+            return NO;
+        }
+
+        // 检查是否为 LTR 字符
+        if ([self isLTRCharacter:c]) {
+            hasLTRCharacter = YES;
+        }
+        // 允许数字、空格、标点等中性字符
+    }
+
+    return hasLTRCharacter;
+}
+
 @end

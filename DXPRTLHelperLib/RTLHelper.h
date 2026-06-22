@@ -182,6 +182,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// - Parameter string: 要适配RTL的字符串
 - (NSString *)RTLString:(NSString *)string;
 
+/// 移除字符串里面的阅读方向的掩码
+/// - Parameter string: 需要处理的字符串
+- (NSString *)removeDirectionMask:(NSString *)string;
+
+/// 处理 NSAttributedString 的 RTL 适配，保留各部分的属性配置
+///
+/// 与RTLString方法功能相同，但专门处理NSAttributedString，保留原有的字体、颜色等属性
+/// 对LTR文本块前后添加方向标记，RTL文本保持不变
+/// - Parameter attributedString: 要适配RTL的NSAttributedString
+- (NSAttributedString *)RTLAttributedString:(NSAttributedString *)attributedString;
+
 /// 类适配RTL布局
 ///
 /// 设置某纯frame布局的类的rtl_layoutStyle属性为RTLLayoutStyleHand。同 类名.rtl_layoutStyle = RTLLayoutStyleHand; 效果一样。区别在于使用该方法不用导入该类的头文件，而是直接通过类名字符串来设置，如果该类不存在或者无rtl_layoutStyle属性，则不会去设置rtl_layoutStyle，进而不会适配rtl。可以设置 rtl_layoutStyle 属性的类应该是 UIView子类 和 UIViewController 子类

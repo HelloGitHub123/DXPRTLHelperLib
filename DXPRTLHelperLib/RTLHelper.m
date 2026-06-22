@@ -12,6 +12,7 @@
 #import <objc/runtime.h>
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
+#import "RTLDirectionMarks.h"
 
 @implementation RTLHelper
 
@@ -213,46 +214,118 @@
     }
     // 正则表达式匹配从右到左的语言文本方向的字符
     NSString *rtlLanRegualr = @"\\u0590-\\u05FF\\u0600-\\u06FF\\u0700-\\u074F\\u0750-\\u077F\\u08A0-\\u08FF\\uFB1D-\\uFB4F\\uFE50-\\uFE6F\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\u0780-\\u07BF\\u0E80-\\u0EFF\\u1000-\\u137F\\u13A0-\\u13FF\\u1780-\\u17FF\\u1800-\\u18AF\\u200F-\\u202E";  // 从右往左阅读的语言unicode范围
-    // 匹配rtl语言字符串 中间可以有空格
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:[NSString stringWithFormat:@"[%@][\\s\\S%@]*[%@]", rtlLanRegualr, rtlLanRegualr, rtlLanRegualr] options:0 error:nil];
-    NSArray *rtlResultArr = [regex matchesInString:string options:0 range:NSMakeRange(0, string.length)];
-    // 收集所有匹配的字符串
-    NSString *rtlStartMark = @"\u200F";
-    NSString *rtlEndMark = @"\u202C";
-    
-    NSString *ltrStartMark = @"\u200E";
-    NSString *ltrEndMark = @"\u202C";
-    
-    NSString *rtlStr = nil;
-    NSString *newRtlStr = nil;
+
+    // 匹配LTR文本块（非RTL字符序列）
+    // 只在LTR部分前后添加ltrStartMark和ltrEndMark，RTL部分保持不变
+    NSString *ltrPattern = [NSString stringWithFormat:@"[^%@]+", rtlLanRegualr];
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:ltrPattern options:0 error:nil];
+    NSArray *ltrResultArr = [regex matchesInString:string options:0 range:NSMakeRange(0, string.length)];
+
     NSMutableString *newString = [string mutableCopy];
-    for (NSTextCheckingResult *rtlResult in rtlResultArr) {
-        rtlStr = [string substringWithRange:rtlResult.range];
-        if (rtlResult.range.location + rtlResult.range.length == string.length) {
-            newRtlStr = [NSString stringWithFormat:@"%@%@%@%@", ltrEndMark, rtlStartMark, rtlStr, rtlEndMark];
-        } else {
-            newRtlStr = [NSString stringWithFormat:@"%@%@%@%@%@", ltrEndMark, rtlStartMark, rtlStr, rtlEndMark, ltrStartMark];
-        }
-        newString = [[newString stringByReplacingOccurrencesOfString:rtlStr withString:newRtlStr] mutableCopy];
+
+    // 从后往前替换，避免位置变化影响
+    for (NSTextCheckingResult *ltrResult in [ltrResultArr reverseObjectEnumerator]) {
+        NSString *ltrStr = [string substringWithRange:ltrResult.range];
+        NSString *newLtrStr = RTL_WRAP_LTR(ltrStr);
+        [newString replaceCharactersInRange:ltrResult.range withString:newLtrStr];
     }
-    if ([newString hasPrefix:ltrEndMark]) {
-        newString = [[newString substringFromIndex:ltrEndMark.length] mutableCopy];  // 头部去掉ltrEndMark
-    } else {
-        [newString insertString:ltrStartMark atIndex:0];  // 头部添加ltrStartMark
-    }
-    if (![newString hasSuffix:rtlEndMark]) {
-        [newString  insertString:ltrEndMark atIndex:newString.length];  // 尾部添加ltrEndMark
-    }
-    
+
     string = [newString copy];
-    
-    if ([self isLanguageRTL] && ![string hasPrefix:@"\u202B"]) {
-        string = [@"\u202B" stringByAppendingString:newString];
-    } else if (![self isLanguageRTL] && ![string hasPrefix:@"\u202A"]) {
-        string = [@"\u202A" stringByAppendingString:string];
+
+    if ([self isLanguageRTL]) {
+        string = RTL_WRAP_RTL(string);
+    } else {
+        string = RTL_WRAP_LTR(string);
     }
-    
+
     return string;
+}
+
+- (NSString *)removeDirectionMask:(NSString *)string {
+    if (!string) {
+        return @"";
+    }
+    // 移除所有 Unicode 双向文本控制字符
+    // \u200E LRM (Left-to-Right Mark)
+    // \u200F RLM (Right-to-Left Mark)
+    // \u202A LRE (Left-to-Right Embedding)
+    // \u202B RLE (Right-to-Left Embedding)
+    // \u202C PDF (Pop Directional Formatting)
+    // \u202D LRO (Left-to-Right Override)
+    // \u202E RLO (Right-to-Left Override)
+    // \u2066 LRI (Left-to-Right Isolate)
+    // \u2067 RLI (Right-to-Left Isolate)
+    // \u2068 FSI (First Strong Isolate)
+    // \u2069 PDI (Pop Directional Isolate)
+    NSMutableString *result = [string mutableCopy];
+    NSString *pattern = @"[\\u200E\\u200F\\u202A\\u202B\\u202C\\u202D\\u202E\\u2066\\u2067\\u2068\\u2069]";
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
+    [regex replaceMatchesInString:result options:0 range:NSMakeRange(0, result.length) withTemplate:@""];
+    return [result copy];
+}
+
+/// 处理 NSAttributedString 的 RTL 适配，保留各部分的属性配置
+///
+/// 与RTLString方法功能相同，但专门处理NSAttributedString，保留原有的字体、颜色等属性
+/// 对LTR文本块前后添加方向标记，RTL文本保持不变
+/// - Parameter attributedString: 要适配RTL的NSAttributedString
+- (NSAttributedString *)RTLAttributedString:(NSAttributedString *)attributedString {
+    if (!attributedString || attributedString.length == 0) {
+        return attributedString;
+    }
+
+    NSString *string = attributedString.string;
+    NSString *rtlLanRegualr = @"\\u0590-\\u05FF\\u0600-\\u06FF\\u0700-\\u074F\\u0750-\\u077F\\u08A0-\\u08FF\\uFB1D-\\uFB4F\\uFE50-\\uFE6F\\uFB50-\\uFDFF\\uFE70-\\uFEFF\\u0780-\\u07BF\\u0E80-\\u0EFF\\u1000-\\u137F\\u13A0-\\u13FF\\u1780-\\u17FF\\u1800-\\u18AF\\u200F-\\u202E";
+
+    // 匹配LTR文本块（非RTL字符序列）
+    NSString *ltrPattern = [NSString stringWithFormat:@"[^%@]+", rtlLanRegualr];
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:ltrPattern options:0 error:nil];
+    NSArray *ltrResultArr = [regex matchesInString:string options:0 range:NSMakeRange(0, string.length)];
+
+    NSMutableAttributedString *newAttrString = [[NSMutableAttributedString alloc] initWithAttributedString:attributedString];
+
+    // 从后往前插入，避免位置变化影响
+    for (NSTextCheckingResult *ltrResult in [ltrResultArr reverseObjectEnumerator]) {
+        NSRange ltrRange = ltrResult.range;
+
+        // 获取LTR块末尾字符的属性，用于endMark
+        NSDictionary *endAttributes = nil;
+        if (ltrRange.location + ltrRange.length > 0 && ltrRange.location + ltrRange.length <= newAttrString.length) {
+            endAttributes = [newAttrString attributesAtIndex:(ltrRange.location + ltrRange.length - 1) effectiveRange:NULL];
+        }
+
+        // 在结束位置插入ltrEndMark
+        NSAttributedString *endMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate attributes:endAttributes];
+        [newAttrString insertAttributedString:endMark atIndex:(ltrRange.location + ltrRange.length)];
+
+        // 获取LTR块开始字符的属性，用于startMark
+        NSDictionary *startAttributes = nil;
+        if (ltrRange.location < newAttrString.length) {
+            startAttributes = [newAttrString attributesAtIndex:ltrRange.location effectiveRange:NULL];
+        }
+
+        // 在开始位置插入ltrStartMark
+        NSAttributedString *startMark = [[NSAttributedString alloc] initWithString:RTLLEFTToRIGHTIsolate attributes:startAttributes];
+        [newAttrString insertAttributedString:startMark atIndex:ltrRange.location];
+    }
+
+    NSString *resultString = newAttrString.string;
+
+    // 添加整体的方向标记
+    NSMutableAttributedString *finalString = [[NSMutableAttributedString alloc] initWithAttributedString:newAttrString];
+    if ([self isLanguageRTL]) {
+        NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate];
+        [finalString insertAttributedString:rtlMark atIndex:0];
+        NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+        [finalString appendAttributedString:rtlEndMark];
+    } else {
+        NSAttributedString *ltrMark = [[NSAttributedString alloc] initWithString:RTLLEFTToRIGHTIsolate];
+        [finalString insertAttributedString:ltrMark atIndex:0];
+        NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+        [finalString appendAttributedString:rtlEndMark];
+    }
+
+    return finalString;
 }
 
 /**
