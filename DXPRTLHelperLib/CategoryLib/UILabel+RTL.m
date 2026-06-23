@@ -8,6 +8,7 @@
 #import "UILabel+RTL.h"
 #import "RTLTools.h"
 #import "RTLDirectionMarks.h"
+#import <objc/runtime.h>
 
 @implementation UILabel (RTL)
 
@@ -18,7 +19,35 @@
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setTextAlignment:) swizzledSEL:@selector(RTLSetTextAlignment:) isInstanceMethod:YES];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setText:) swizzledSEL:@selector(RTLSetText:) isInstanceMethod:YES];
         [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(setAttributedText:) swizzledSEL:@selector(RTLSetAttributedText:) isInstanceMethod:YES];
+        [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(text) swizzledSEL:@selector(RTLText) isInstanceMethod:YES];
+        [RTLTools methodSwizzlingWithClass:self oriSEL:@selector(attributedText) swizzledSEL:@selector(RTLAttributedText) isInstanceMethod:YES];
     });
+}
+
+static const char RTLOriginTextStr = '\0';
+
+- (NSString *)RTLOriginText {
+    id originText = objc_getAssociatedObject(self, &RTLOriginTextStr);
+    return originText;
+}
+
+- (void)setRTLOriginText:(NSString *)originText {
+    if (self.RTLOriginText != originText) {
+        objc_setAssociatedObject(self, &RTLOriginTextStr, originText, OBJC_ASSOCIATION_RETAIN);
+    }
+}
+
+static const char RTLOriginAttributedTextStr = '\0';
+
+- (NSAttributedString *)RTLOriginAttributedText {
+    id originAttributedText = objc_getAssociatedObject(self, &RTLOriginAttributedTextStr);
+    return originAttributedText;
+}
+
+- (void)setRTLOriginAttributedText:(NSAttributedString *)originAttributedText {
+    if (self.RTLOriginAttributedText != originAttributedText) {
+        objc_setAssociatedObject(self, &RTLOriginAttributedTextStr, originAttributedText, OBJC_ASSOCIATION_RETAIN);
+    }
 }
 
 - (instancetype)initRTLWithFrame:(CGRect)frame
@@ -53,12 +82,27 @@
     [self RTLSetTextAlignment:textAlignment];
 }
 
+- (NSString *)RTLText {
+    if (![RTLTools canDoRTLWork]) {
+        return [self RTLText];
+    }
+    return self.RTLOriginText;
+}
+
 - (void)RTLSetText:(NSString *)text {
     if (![RTLTools canDoRTLWork] || text.length == 0) {
         [self RTLSetText:text];
         return;
     }
+    self.RTLOriginText = text;
     [self RTLSetText:RTL_EMBED_RTL(text)];
+}
+
+- (NSAttributedString *)RTLAttributedText {
+    if (![RTLTools canDoRTLWork]) {
+        return [self RTLAttributedText];
+    }
+    return self.RTLOriginAttributedText;
 }
 
 - (void)RTLSetAttributedText:(NSAttributedString *)attributedText {
@@ -66,6 +110,7 @@
         [self RTLSetAttributedText:attributedText];
         return;
     }
+    self.RTLOriginAttributedText = attributedText;
     NSRange attrsRange = NSMakeRange(0, attributedText.length);
     NSMutableAttributedString *newAttributeText = [[NSMutableAttributedString alloc] initWithString:attributedText.string];
     [attributedText enumerateAttributesInRange:attrsRange options:NSAttributedStringEnumerationLongestEffectiveRangeNotRequired usingBlock:^(NSDictionary<NSAttributedStringKey,id> * _Nonnull attrs, NSRange range, BOOL * _Nonnull stop) {
