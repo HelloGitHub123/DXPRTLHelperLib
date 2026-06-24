@@ -7,6 +7,7 @@
 
 #import "UITextView+RTL.h"
 #import "RTLTools.h"
+#import "RTLDirectionMarks.h"
 
 @implementation UITextView (RTL)
 
@@ -59,7 +60,10 @@
 }
 
 - (void)RTLSetAttributedText:(NSAttributedString *)attributedText {
-    if (![RTLTools canDoRTLWork] || attributedText.length == 0) {
+    if (!attributedText) {
+        return;
+    }
+    if (![RTLTools canDoRTLWork]) {
         [self RTLSetAttributedText:attributedText];
         return;
     }

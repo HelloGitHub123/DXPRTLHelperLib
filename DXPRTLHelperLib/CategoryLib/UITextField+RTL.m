@@ -7,6 +7,7 @@
 
 #import "UITextField+RTL.h"
 #import "RTLTools.h"
+#import "RTLDirectionMarks.h"
 
 @implementation UITextField (RTL)
 
@@ -61,7 +62,10 @@
 }
 
 - (void)RTLSetAttributedText:(NSAttributedString *)attributedText {
-    if (![RTLTools canDoRTLWork] || attributedText.length == 0) {
+    if (!attributedText) {
+        return;
+    }
+    if (![RTLTools canDoRTLWork]) {
         [self RTLSetAttributedText:attributedText];
         return;
     }
@@ -91,6 +95,10 @@
         }
         [newAttributeText addAttributes:newAttrs range:range];
     }];
+    NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate];
+    [newAttributeText insertAttributedString:rtlMark atIndex:0];
+    NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+    [newAttributeText appendAttributedString:rtlEndMark];
     [RTLTools setEnableRTLCategoryWork:NO];
     [self RTLSetAttributedText:newAttributeText];
     [RTLTools setEnableRTLCategoryWork:YES];
@@ -107,7 +115,10 @@
 }
 
 - (void)RTLSetAttributedPlaceholder:(NSAttributedString *)attributedPlaceholder {
-    if (![RTLTools canDoRTLWork] || attributedPlaceholder.length == 0) {
+    if (!attributedPlaceholder) {
+        return;
+    }
+    if (![RTLTools canDoRTLWork]) {
         [self RTLSetAttributedPlaceholder:attributedPlaceholder];
         return;
     }
@@ -137,6 +148,10 @@
         }
         [newAttributePlaceholder addAttributes:newAttrs range:range];
     }];
+    NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate];
+    [newAttributePlaceholder insertAttributedString:rtlMark atIndex:0];
+    NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+    [newAttributePlaceholder appendAttributedString:rtlEndMark];
     [RTLTools setEnableRTLCategoryWork:NO];
     [self RTLSetAttributedPlaceholder:newAttributePlaceholder];
     [RTLTools setEnableRTLCategoryWork:YES];

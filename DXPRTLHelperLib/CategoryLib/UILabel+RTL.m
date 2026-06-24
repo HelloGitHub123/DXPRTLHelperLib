@@ -84,13 +84,29 @@ static const char RTLOriginAttributedTextStr = '\0';
 
 - (NSString *)RTLText {
     if (![RTLTools canDoRTLWork]) {
+        return [self RTLText];  // 不需要RTL处理，返回原始文本
+    }
+    
+    // 优先处理 attributedText 的情况：返回原始 attributedString 的字符串
+    if (self.RTLOriginAttributedText) {
+        return self.RTLOriginAttributedText.string;
+    }
+
+    // 如果 RTLOriginText 为空（比如 placeholder 等未通过 RTLSetText 设置的 UILabel）
+    // 需要直接调用原始方法获取当前显示的文本
+    if (!self.RTLOriginText || self.RTLOriginText.length == 0) {
         return [self RTLText];
     }
+
+    // 需要RTL处理时，返回保存的原始文本（不含方向标记）
     return self.RTLOriginText;
 }
 
 - (void)RTLSetText:(NSString *)text {
-    if (![RTLTools canDoRTLWork] || text.length == 0) {
+    if (!text) {
+        return;
+    }
+    if (![RTLTools canDoRTLWork]) {
         [self RTLSetText:text];
         return;
     }
@@ -106,7 +122,10 @@ static const char RTLOriginAttributedTextStr = '\0';
 }
 
 - (void)RTLSetAttributedText:(NSAttributedString *)attributedText {
-    if (![RTLTools canDoRTLWork] || attributedText.length == 0) {
+    if (!attributedText) {
+        return;
+    }
+    if (![RTLTools canDoRTLWork]) {
         [self RTLSetAttributedText:attributedText];
         return;
     }
