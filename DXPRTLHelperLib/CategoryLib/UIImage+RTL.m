@@ -23,9 +23,7 @@
 + (UIImage *)RTLImageNamed:(NSString *)name {
     UIImage *img = [self RTLImageNamed:name];
     if (img && [RTLTools canDoRTLWork] && [RTLTools evaluateImgToReverse:name]) {
-        img = [UIImage imageWithCGImage:img.CGImage
-                                  scale:img.scale
-                               orientation:UIImageOrientationUpMirrored];
+        img = [img imageWithHorizontallyFlippedOrientation];
     }
     return img;
 }
@@ -33,9 +31,7 @@
 + (UIImage *)RTLImageWithContentsOfFile:(NSString *)path {
     UIImage *img = [self RTLImageWithContentsOfFile:path];
     if (img && [RTLTools canDoRTLWork] && [RTLTools evaluateImgToReverse:path]) {
-        img = [UIImage imageWithCGImage:img.CGImage
-                                  scale:img.scale
-                               orientation:UIImageOrientationUpMirrored];
+        img = [img imageWithHorizontallyFlippedOrientation];
     }
     return img;
 }
@@ -43,9 +39,7 @@
 - (instancetype)initRTLWithContentsOfFile:(NSString *)path {
     self = [self initRTLWithContentsOfFile:path];
     if (self && [RTLTools canDoRTLWork] && [RTLTools evaluateImgToReverse:path]) {
-        self = [UIImage imageWithCGImage:self.CGImage
-                                  scale:self.scale
-                               orientation:UIImageOrientationUpMirrored];
+        self = [self imageWithHorizontallyFlippedOrientation];
     }
     return self;
 }
@@ -53,9 +47,7 @@
 + (nullable UIImage *)RTLImageNamed:(NSString *)name inBundle:(nullable NSBundle *)bundle compatibleWithTraitCollection:(nullable UITraitCollection *)traitCollection {
 	UIImage *img = [self RTLImageNamed:name inBundle:bundle compatibleWithTraitCollection:traitCollection];
 	if (img && [RTLTools canDoRTLWork] && [RTLTools evaluateImgToReverse:name]) {
-		img = [UIImage imageWithCGImage:img.CGImage
-								  scale:img.scale
-							orientation:UIImageOrientationUpMirrored];
+        img = [img imageWithHorizontallyFlippedOrientation];
 	}
 	return img;
 	
