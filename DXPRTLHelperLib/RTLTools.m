@@ -7,6 +7,7 @@
 
 #import "RTLTools.h"
 #import "RTLConfigurationManager.h"
+#import "RTLDirectionMarks.h"
 #import <objc/runtime.h>
 
 // 这里的工具方法只是设置rtl环境下的情况
@@ -181,6 +182,134 @@
 
 + (NSString *)getLocale {
     return [RTLConfigurationManager sharedInstance].locale;
+}
+
++ (NSString *)rtlStringWithKeepLtrRegular:(NSString *)text {
+    if (text.length == 0) {
+        return text;
+    }
+
+    // 多个正则、多处命中的区间统一收集，重叠区间已合并
+    NSIndexSet *matchedRanges = [self keepLtrMatchedRangesInText:text];
+    if (!matchedRanges) {
+        return text;
+    }
+
+    NSMutableString *result = [NSMutableString stringWithCapacity:text.length + matchedRanges.count * 2];
+    __block NSUInteger cursor = 0;
+    [matchedRanges enumerateRangesUsingBlock:^(NSRange range, BOOL * _Nonnull stop) {
+        if (range.location > cursor) {
+            [result appendString:[text substringWithRange:NSMakeRange(cursor, range.location - cursor)]];
+        }
+        // RTL_EMBED_LTR: LRE + 命中内容 + PDF，保持该段从左往右阅读
+        [result appendString:RTLLEFTToRIGHTEmbedding];
+        [result appendString:[text substringWithRange:range]];
+        [result appendString:RTLPopDirectionalFormatting];
+        cursor = NSMaxRange(range);
+    }];
+    if (cursor < text.length) {
+        [result appendString:[text substringWithRange:NSMakeRange(cursor, text.length - cursor)]];
+    }
+    return [result copy];
+}
+
++ (NSAttributedString *)rtlAttributedStringWithKeepLtrRegular:(NSAttributedString *)attrText {
+    if (attrText.length == 0) {
+        return attrText;
+    }
+
+    NSIndexSet *matchedRanges = [self keepLtrMatchedRangesInText:attrText.string];
+    if (!matchedRanges) {
+        return attrText;
+    }
+
+    NSMutableAttributedString *result = [[NSMutableAttributedString alloc] init];
+    __block NSUInteger cursor = 0;
+    [matchedRanges enumerateRangesUsingBlock:^(NSRange range, BOOL * _Nonnull stop) {
+        NSRange beforeRange = NSMakeRange(cursor, range.location - cursor);
+        if (beforeRange.length > 0) {
+            // 未命中的部分原样拷贝，样式不受影响
+            [result appendAttributedString:[attrText attributedSubstringFromRange:beforeRange]];
+        }
+
+        NSAttributedString *matchedAttrText = [attrText attributedSubstringFromRange:range];
+        // 标记字符继承命中区间首字符的样式，只参与方向排版，不改变原有样式
+        NSDictionary *embedAttrs = [matchedAttrText attributesAtIndex:0 effectiveRange:NULL];
+        [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLLEFTToRIGHTEmbedding attributes:embedAttrs]];
+        [result appendAttributedString:matchedAttrText];
+        [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLPopDirectionalFormatting attributes:embedAttrs]];
+        cursor = NSMaxRange(range);
+    }];
+    if (cursor < attrText.length) {
+        [result appendAttributedString:[attrText attributedSubstringFromRange:NSMakeRange(cursor, attrText.length - cursor)]];
+    }
+    return [result copy];
+}
+
+#pragma mark - Keep LTR Regular (Private)
+
+/// 用配置的 keepLTRDirectionTextWithRegulars 正则扫描文本，返回全部命中区间
+/// 正则按配置顺序（越靠前优先级越高）依次匹配；已被高优先级正则命中的区间，低优先级正则不再重复匹配
++ (NSIndexSet *)keepLtrMatchedRangesInText:(NSString *)text {
+    if (text.length == 0) {
+        return nil;
+    }
+
+    NSMutableIndexSet *matchedRanges = [NSMutableIndexSet indexSet];
+    for (NSString *regular in [RTLConfigurationManager sharedInstance].keepLTRDirectionTextWithRegulars) {
+        NSString *pattern = [self keepLtrPatternFromRegular:regular];
+        if (!pattern) {
+            continue;
+        }
+        NSRegularExpression *regex = [self regexWithPattern:pattern];
+        if (!regex) {
+            continue;
+        }
+        [regex enumerateMatchesInString:text options:0 range:NSMakeRange(0, text.length) usingBlock:^(NSTextCheckingResult * _Nullable result, NSMatchingFlags flags, BOOL * _Nonnull stop) {
+            if (result && result.range.location != NSNotFound && result.range.length > 0
+                // 与高优先级已命中区间重叠的低优先级命中，跳过
+                && ![matchedRanges intersectsIndexesInRange:result.range]) {
+                [matchedRanges addIndexesInRange:result.range];
+            }
+        }];
+    }
+    return matchedRanges.count > 0 ? [matchedRanges copy] : nil;
+}
+
+/// keepLTRDirectionTextWithRegulars 里的单个元素兼容两种形式：
+/// 1. 谓词完整形式 "SELF MATCHES xxx"（与 needReverseImgWithRegulars 约定一致，正则可用引号包裹）
+/// 2. 直接的 ICU 正则表达式
++ (NSString *)keepLtrPatternFromRegular:(NSString *)regular {
+    if (![regular isKindOfClass:NSString.class] || regular.length == 0) {
+        return nil;
+    }
+
+    NSString *pattern = regular;
+    NSRange selfMatchesRange = [pattern rangeOfString:@"SELF MATCHES" options:NSCaseInsensitiveSearch];
+    if (selfMatchesRange.location != NSNotFound) {
+        pattern = [pattern substringFromIndex:NSMaxRange(selfMatchesRange)];
+    }
+    pattern = [pattern stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+    // 去掉谓词写法里包裹正则的成对引号
+    if (pattern.length >= 2) {
+        unichar first = [pattern characterAtIndex:0];
+        unichar last = [pattern characterAtIndex:pattern.length - 1];
+        if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+            pattern = [pattern substringWithRange:NSMakeRange(1, pattern.length - 2)];
+        }
+    }
+    return pattern.length > 0 ? pattern : nil;
+}
+
++ (NSRegularExpression *)regexWithPattern:(NSString *)pattern {
+    @try {
+        // 非法正则返回 nil，不中断其它正则的处理
+        return [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
+    } @catch (NSException *exception) {
+        NSLog(@"%@ is not a valid regular expression!", pattern);
+        return nil;
+    }
 }
 
 #pragma mark - Helper Methods (Private)

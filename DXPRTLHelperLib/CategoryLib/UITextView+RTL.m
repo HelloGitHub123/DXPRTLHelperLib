@@ -93,7 +93,7 @@
         }
         [newAttributeText addAttributes:newAttrs range:range];
     }];
-    [self RTLSetAttributedText:newAttributeText];
+    [self RTLSetAttributedText:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributeText]];
 
 }
 

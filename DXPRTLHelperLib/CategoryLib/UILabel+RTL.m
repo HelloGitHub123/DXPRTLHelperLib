@@ -111,7 +111,7 @@ static const char RTLOriginAttributedTextStr = '\0';
         return;
     }
     self.RTLOriginText = text;
-    [self RTLSetText:RTL_EMBED_RTL(text)];
+    [self RTLSetText:RTL_WRAP_RTL([RTLTools rtlStringWithKeepLtrRegular:text])];
 }
 
 - (NSAttributedString *)RTLAttributedText {
@@ -159,7 +159,7 @@ static const char RTLOriginAttributedTextStr = '\0';
     [newAttributeText insertAttributedString:rtlMark atIndex:0];
     NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
     [newAttributeText appendAttributedString:rtlEndMark];
-    [self RTLSetAttributedText:newAttributeText];
+    [self RTLSetAttributedText:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributeText]];
 }
 
 @end

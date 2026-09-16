@@ -100,7 +100,7 @@
     NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
     [newAttributeText appendAttributedString:rtlEndMark];
     [RTLTools setEnableRTLCategoryWork:NO];
-    [self RTLSetAttributedText:newAttributeText];
+    [self RTLSetAttributedText:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributeText]];
     [RTLTools setEnableRTLCategoryWork:YES];
 
 }
@@ -153,7 +153,7 @@
     NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
     [newAttributePlaceholder appendAttributedString:rtlEndMark];
     [RTLTools setEnableRTLCategoryWork:NO];
-    [self RTLSetAttributedPlaceholder:newAttributePlaceholder];
+    [self RTLSetAttributedPlaceholder:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributePlaceholder]];
     [RTLTools setEnableRTLCategoryWork:YES];
 }
 

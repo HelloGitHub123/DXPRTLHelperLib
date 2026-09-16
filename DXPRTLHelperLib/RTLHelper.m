@@ -157,6 +157,18 @@
     return [RTLConfigurationManager sharedInstance].keepOriginImgs;
 }
 
+- (NSMutableArray<NSString *> *)keepLTRDirectionTextWithRegulars {
+    return [RTLConfigurationManager sharedInstance].keepLTRDirectionTextWithRegulars;
+}
+
+- (void)addKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars {
+    [[RTLConfigurationManager sharedInstance] addKeepLTRDirectionTextWithRegulars:regulars];
+}
+
+- (void)insertKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars {
+    [[RTLConfigurationManager sharedInstance] insertKeepLTRDirectionTextWithRegulars:regulars];
+}
+
 - (NSString *)locale {
     return [RTLConfigurationManager sharedInstance].locale;
 }
@@ -262,6 +274,38 @@
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
     [regex replaceMatchesInString:result options:0 range:NSMakeRange(0, result.length) withTemplate:@""];
     return [result copy];
+}
+
+/// 只移除字符串首尾的 Unicode 双向文本控制字符，中间的保留
+///
+/// 字符集合与 removeDirectionMask: 一致（LRM/RLM、LRE/RLE/PDF、LRO/RLO、LRI/RLI/FSI/PDI）
+- (NSString *)removeEdgesDirectionMask:(NSString *)string {
+    if (!string) {
+        return @"";
+    }
+    if (string.length == 0) {
+        return string;
+    }
+
+    NSCharacterSet *maskSet = [NSCharacterSet characterSetWithCharactersInString:
+                               [@[RTLLEFTToRIGHTMark, RTLRIGHTToLEFTMark,
+                                  RTLLEFTToRIGHTEmbedding, RTLRIGHTToLEFTEmbedding, RTLPopDirectionalFormatting,
+                                  RTLLEFTToRIGHTOverride, RTLRIGHTToLEFTOverride,
+                                  RTLLEFTToRIGHTIsolate, RTLRIGHTToLEFTIsolate, RTLFirstStrongIsolate, RTLPopDirectionalIsolate]
+                                 componentsJoinedByString:@""]];
+
+    NSUInteger start = 0;
+    while (start < string.length && [maskSet characterIsMember:[string characterAtIndex:start]]) {
+        start++;
+    }
+    NSUInteger end = string.length;
+    while (end > start && [maskSet characterIsMember:[string characterAtIndex:end - 1]]) {
+        end--;
+    }
+    if (start == 0 && end == string.length) {
+        return string;
+    }
+    return [string substringWithRange:NSMakeRange(start, end - start)];
 }
 
 /// 处理 NSAttributedString 的 RTL 适配，保留各部分的属性配置

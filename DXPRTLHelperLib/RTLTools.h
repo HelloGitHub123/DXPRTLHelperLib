@@ -33,6 +33,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSString *)getLocale;
 
++ (NSString *)rtlStringWithKeepLtrRegular:(NSString *)text;
+
++ (NSAttributedString *)rtlAttributedStringWithKeepLtrRegular:(NSAttributedString *)attrText;
+
 #pragma mark - Text Direction Detection
 
 /// 判断字符串是否以 RTL 语言开头

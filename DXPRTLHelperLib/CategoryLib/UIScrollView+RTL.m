@@ -23,8 +23,8 @@
     CGSize oldSize = self.contentSize;
     BOOL hasChanged = newSize.width != oldSize.width || newSize.height != oldSize.height;
     [self RTLSetContentSize:size];
-    if (size.width > 0 && ![self isKindOfClass:[UICollectionView class]] && ![self isKindOfClass:[UITableView class]] && hasChanged && [RTLTools canDoRTLWork]) {
-//        NSLog(@"content size is (%f, %f)", size.width, size.height);
+    if (size.width > 0 && ![self isKindOfClass:[UICollectionView class]] && ![self isKindOfClass:[UITableView class]] && ![self isKindOfClass:[UITextView class]] && hasChanged && [RTLTools canDoRTLWork]) {
+        NSLog(@"content size is (%f, %f)", size.width, size.height);
         [self setContentOffset:CGPointMake(self.contentInset.left + self.contentSize.width-self.frame.size.width, self.contentOffset.y) animated:NO];
         if (self.contentInset.left + size.width-self.frame.size.width < 0) {
             self.contentInset = UIEdgeInsetsMake(self.contentInset.top, self.contentInset.left, self.contentInset.bottom, self.frame.size.width - size.width);

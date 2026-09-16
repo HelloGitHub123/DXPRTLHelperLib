@@ -44,6 +44,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// 优先级 **keepOriginImgs > needReverseImgs > needReverseImgWithRegulars**
 @property (nonatomic, strong, readonly) NSMutableSet<NSString *> *keepOriginImgs;
 
+/// 始终保持LTR阅读方向的正则列表，**有序，越靠前优先级越高**
+///
+/// 匹配时从优先级高的开始，已被高优先级正则命中的区间，低优先级正则不再重复匹配
+@property (nonatomic, readonly) NSMutableArray<NSString *> *keepLTRDirectionTextWithRegulars;
+
+/// 追加保持LTR阅读方向的正则，追加的优先级低于已有元素
+- (void)addKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars;
+
+/// 插入保持LTR阅读方向的正则，插到最前，优先级高于已有元素
+- (void)insertKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars;
+
 /// 具体的语言locale
 ///
 /// 用于配置date，默认系统第一个语言
@@ -185,6 +196,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 移除字符串里面的阅读方向的掩码
 /// - Parameter string: 需要处理的字符串
 - (NSString *)removeDirectionMask:(NSString *)string;
+
+/// 只移除字符串**首尾**的阅读方向掩码，中间的保留
+///
+/// 与 removeDirectionMask: 的区别：后者会移除整个字符串中所有的方向掩码
+/// - Parameter string: 需要处理的字符串
+- (NSString *)removeEdgesDirectionMask:(NSString *)string;
 
 /// 处理 NSAttributedString 的 RTL 适配，保留各部分的属性配置
 ///

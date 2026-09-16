@@ -28,6 +28,7 @@
         _needReverseImgs = [[NSMutableSet alloc]init];
         _needReverseImgWithRegulars = [[NSMutableSet alloc]init];
         _keepOriginImgs = [[NSMutableSet alloc]init];
+        _keepLTRDirectionTextWithRegulars = [[NSMutableArray alloc]init];
         _atomViewClasses = [[NSSet alloc] initWithArray:@[
             // UIControl
             [UIButton class],
@@ -47,6 +48,15 @@
         ]];
     }
     return self;
+}
+
+- (void)addKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars {
+    [self.keepLTRDirectionTextWithRegulars addObjectsFromArray:regulars];
+}
+
+- (void)insertKeepLTRDirectionTextWithRegulars:(NSArray<NSString *> *)regulars {
+    [self.keepLTRDirectionTextWithRegulars insertObjects:regulars
+                                                atIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, regulars.count)]];
 }
 
 #pragma mark -- setter
