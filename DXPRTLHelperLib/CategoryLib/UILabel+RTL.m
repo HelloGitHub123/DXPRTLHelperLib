@@ -155,9 +155,13 @@ static const char RTLOriginAttributedTextStr = '\0';
         }
         [newAttributeText addAttributes:newAttrs range:range];
     }];
-    NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate];
+    // 头部标记继承内容首字符的属性（含段落样式），避免裸插入字符抢占段落首个位置导致 alignment 失效
+    NSDictionary *headAttrs = newAttributeText.length > 0 ? [newAttributeText attributesAtIndex:0 effectiveRange:NULL] : nil;
+    NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate attributes:headAttrs];
     [newAttributeText insertAttributedString:rtlMark atIndex:0];
-    NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate];
+    // 尾部标记继承内容末字符的属性
+    NSDictionary *tailAttrs = newAttributeText.length > 0 ? [newAttributeText attributesAtIndex:newAttributeText.length - 1 effectiveRange:NULL] : nil;
+    NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate attributes:tailAttrs];
     [newAttributeText appendAttributedString:rtlEndMark];
     [self RTLSetAttributedText:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributeText]];
 }

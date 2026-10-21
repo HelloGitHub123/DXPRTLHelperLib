@@ -13,6 +13,7 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #import "RTLDirectionMarks.h"
+#import "RTLTools.h"
 
 @implementation RTLHelper
 
@@ -254,58 +255,16 @@
 }
 
 - (NSString *)removeDirectionMask:(NSString *)string {
-    if (!string) {
-        return @"";
-    }
-    // 移除所有 Unicode 双向文本控制字符
-    // \u200E LRM (Left-to-Right Mark)
-    // \u200F RLM (Right-to-Left Mark)
-    // \u202A LRE (Left-to-Right Embedding)
-    // \u202B RLE (Right-to-Left Embedding)
-    // \u202C PDF (Pop Directional Formatting)
-    // \u202D LRO (Left-to-Right Override)
-    // \u202E RLO (Right-to-Left Override)
-    // \u2066 LRI (Left-to-Right Isolate)
-    // \u2067 RLI (Right-to-Left Isolate)
-    // \u2068 FSI (First Strong Isolate)
-    // \u2069 PDI (Pop Directional Isolate)
-    NSMutableString *result = [string mutableCopy];
-    NSString *pattern = @"[\\u200E\\u200F\\u202A\\u202B\\u202C\\u202D\\u202E\\u2066\\u2067\\u2068\\u2069]";
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern options:0 error:nil];
-    [regex replaceMatchesInString:result options:0 range:NSMakeRange(0, result.length) withTemplate:@""];
-    return [result copy];
+    // 具体实现见 RTLTools
+    return [RTLTools removeDirectionMask:string];
 }
 
 /// 只移除字符串首尾的 Unicode 双向文本控制字符，中间的保留
 ///
 /// 字符集合与 removeDirectionMask: 一致（LRM/RLM、LRE/RLE/PDF、LRO/RLO、LRI/RLI/FSI/PDI）
 - (NSString *)removeEdgesDirectionMask:(NSString *)string {
-    if (!string) {
-        return @"";
-    }
-    if (string.length == 0) {
-        return string;
-    }
-
-    NSCharacterSet *maskSet = [NSCharacterSet characterSetWithCharactersInString:
-                               [@[RTLLEFTToRIGHTMark, RTLRIGHTToLEFTMark,
-                                  RTLLEFTToRIGHTEmbedding, RTLRIGHTToLEFTEmbedding, RTLPopDirectionalFormatting,
-                                  RTLLEFTToRIGHTOverride, RTLRIGHTToLEFTOverride,
-                                  RTLLEFTToRIGHTIsolate, RTLRIGHTToLEFTIsolate, RTLFirstStrongIsolate, RTLPopDirectionalIsolate]
-                                 componentsJoinedByString:@""]];
-
-    NSUInteger start = 0;
-    while (start < string.length && [maskSet characterIsMember:[string characterAtIndex:start]]) {
-        start++;
-    }
-    NSUInteger end = string.length;
-    while (end > start && [maskSet characterIsMember:[string characterAtIndex:end - 1]]) {
-        end--;
-    }
-    if (start == 0 && end == string.length) {
-        return string;
-    }
-    return [string substringWithRange:NSMakeRange(start, end - start)];
+    // 具体实现见 RTLTools
+    return [RTLTools removeEdgesDirectionMask:string];
 }
 
 /// 处理 NSAttributedString 的 RTL 适配，保留各部分的属性配置

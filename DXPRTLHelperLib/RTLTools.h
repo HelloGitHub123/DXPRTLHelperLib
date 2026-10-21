@@ -37,6 +37,31 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (NSAttributedString *)rtlAttributedStringWithKeepLtrRegular:(NSAttributedString *)attrText;
 
+#pragma mark - Direction Mask Removal
+
+/// 移除字符串中所有的方向控制字符（LRM/RLM、LRE/RLE/PDF、LRO/RLO、LRI/RLI/FSI/PDI）
+/// - Parameter text: 需要处理的字符串，传 nil 时返回 @""
++ (NSString *)removeDirectionMask:(NSString *)text;
+
+/// 只移除字符串**首尾**的方向控制字符，中间的保留
+///
+/// 与 removeDirectionMask: 的区别：后者会移除整个字符串中所有的方向掩码
+/// - Parameter text: 需要处理的字符串，传 nil 时返回 @""
++ (NSString *)removeEdgesDirectionMask:(NSString *)text;
+
+/// 将「含方向控制字符文本」中的 range 转换为移除方向控制字符后文本中的 range。
+/// 编辑代理回调中的 range 是存储坐标（含方向字符），可用该方法转换为去除方向字符后文本的坐标
+/// - Parameters:
+///   - maskedRange: 含方向控制字符文本中的 range
+///   - maskedText: 含方向控制字符的文本
++ (NSRange)unmaskedRangeFromMaskedRange:(NSRange)maskedRange inMaskedText:(NSString *)maskedText;
+
+/// 将「移除方向控制字符后文本」中的 range 转换回含方向控制字符文本中的 range
+/// - Parameters:
+///   - unmaskedRange: 移除方向控制字符后文本中的 range
+///   - maskedText: 含方向控制字符的文本
++ (NSRange)maskedRangeFromUnmaskedRange:(NSRange)unmaskedRange inMaskedText:(NSString *)maskedText;
+
 #pragma mark - Text Direction Detection
 
 /// 判断字符串是否以 RTL 语言开头

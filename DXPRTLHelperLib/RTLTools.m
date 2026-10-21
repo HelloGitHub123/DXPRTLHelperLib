@@ -246,6 +246,118 @@
     return [result copy];
 }
 
+#pragma mark - Direction Mask Removal
+
+/// 方向控制字符集合：LRM/RLM、LRE/RLE/PDF、LRO/RLO、LRI/RLI/FSI/PDI
+/// （不含 ALM 与 ZWJ/ZWNJ/零宽空格，与 RTLHelper 既有行为保持一致）
++ (NSCharacterSet *)directionMaskCharacterSet {
+    static NSCharacterSet *maskSet = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        maskSet = [NSCharacterSet characterSetWithCharactersInString:
+                   [@[RTLLEFTToRIGHTMark, RTLRIGHTToLEFTMark,
+                      RTLLEFTToRIGHTEmbedding, RTLRIGHTToLEFTEmbedding, RTLPopDirectionalFormatting,
+                      RTLLEFTToRIGHTOverride, RTLRIGHTToLEFTOverride,
+                      RTLLEFTToRIGHTIsolate, RTLRIGHTToLEFTIsolate, RTLFirstStrongIsolate, RTLPopDirectionalIsolate]
+                    componentsJoinedByString:@""]];
+    });
+    return maskSet;
+}
+
++ (NSString *)removeDirectionMask:(NSString *)text {
+    if (!text) {
+        return @"";
+    }
+    if (text.length == 0) {
+        return text;
+    }
+    NSCharacterSet *maskSet = [self directionMaskCharacterSet];
+    // 无方向字符时直接返回原文，避免无谓的拆分拼接
+    if ([text rangeOfCharacterFromSet:maskSet].location == NSNotFound) {
+        return text;
+    }
+    return [[text componentsSeparatedByCharactersInSet:maskSet] componentsJoinedByString:@""];
+}
+
++ (NSString *)removeEdgesDirectionMask:(NSString *)text {
+    if (!text) {
+        return @"";
+    }
+    if (text.length == 0) {
+        return text;
+    }
+    NSCharacterSet *maskSet = [self directionMaskCharacterSet];
+    NSUInteger start = 0;
+    while (start < text.length && [maskSet characterIsMember:[text characterAtIndex:start]]) {
+        start++;
+    }
+    NSUInteger end = text.length;
+    while (end > start && [maskSet characterIsMember:[text characterAtIndex:end - 1]]) {
+        end--;
+    }
+    if (start == 0 && end == text.length) {
+        return text;
+    }
+    return [text substringWithRange:NSMakeRange(start, end - start)];
+}
+
++ (NSRange)unmaskedRangeFromMaskedRange:(NSRange)maskedRange inMaskedText:(NSString *)maskedText {
+    if (maskedText.length == 0) {
+        return NSMakeRange(0, 0);
+    }
+    NSCharacterSet *maskSet = [self directionMaskCharacterSet];
+    NSUInteger textLength = maskedText.length;
+    NSUInteger location = MIN(maskedRange.location, textLength);
+    NSUInteger end = MIN(NSMaxRange(maskedRange), textLength);
+    if (end < location) {
+        end = location;
+    }
+    // 起点之前的掩码数使 location 前移，区间内的掩码数使 length 缩短
+    NSUInteger masksBefore = 0;
+    NSUInteger masksInside = 0;
+    for (NSUInteger i = 0; i < end; i++) {
+        if ([maskSet characterIsMember:[maskedText characterAtIndex:i]]) {
+            if (i < location) {
+                masksBefore++;
+            } else {
+                masksInside++;
+            }
+        }
+    }
+    return NSMakeRange(location - masksBefore, (end - location) - masksInside);
+}
+
++ (NSRange)maskedRangeFromUnmaskedRange:(NSRange)unmaskedRange inMaskedText:(NSString *)maskedText {
+    if (maskedText.length == 0) {
+        return NSMakeRange(0, 0);
+    }
+    NSCharacterSet *maskSet = [self directionMaskCharacterSet];
+    NSUInteger textLength = maskedText.length;
+    // 定位起点：跳过 unmaskedRange.location 个非掩码字符
+    NSUInteger rawIndex = 0;
+    NSUInteger contentCount = 0;
+    while (rawIndex < textLength && contentCount < unmaskedRange.location) {
+        if (![maskSet characterIsMember:[maskedText characterAtIndex:rawIndex]]) {
+            contentCount++;
+        }
+        rawIndex++;
+    }
+    // 起点处紧贴的掩码字符跳过，使起点落在内容字符上（掩码字符零宽，视觉上位置一致）
+    while (rawIndex < textLength && [maskSet characterIsMember:[maskedText characterAtIndex:rawIndex]]) {
+        rawIndex++;
+    }
+    NSUInteger rawStart = rawIndex;
+    // 从起点开始，覆盖 unmaskedRange.length 个非掩码字符（区间内的掩码计入 length）
+    contentCount = 0;
+    while (rawIndex < textLength && contentCount < unmaskedRange.length) {
+        if (![maskSet characterIsMember:[maskedText characterAtIndex:rawIndex]]) {
+            contentCount++;
+        }
+        rawIndex++;
+    }
+    return NSMakeRange(rawStart, rawIndex - rawStart);
+}
+
 #pragma mark - Keep LTR Regular (Private)
 
 /// 用配置的 keepLTRDirectionTextWithRegulars 正则扫描文本，返回全部命中区间

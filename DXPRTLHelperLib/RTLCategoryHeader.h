@@ -27,4 +27,8 @@
 
 #import "UIBezierPath+RTL.h"
 
+// custom view
+#import "RTLTextView.h"
+#import "RTLTextField.h"
+
 #endif /* RTLCategoryHeader_h */
