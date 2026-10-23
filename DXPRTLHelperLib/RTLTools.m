@@ -201,16 +201,32 @@
         if (range.location > cursor) {
             [result appendString:[text substringWithRange:NSMakeRange(cursor, range.location - cursor)]];
         }
-        // RTL_EMBED_LTR: LRE + 命中内容 + PDF，保持该段从左往右阅读
-        [result appendString:RTLLEFTToRIGHTEmbedding];
-        [result appendString:[text substringWithRange:range]];
-        [result appendString:RTLPopDirectionalFormatting];
+        // RTL_EMBED_LTR: LRE + 命中内容 + PDF，保持该段从左往右阅读；
+        // 命中 token 自身或紧贴前后已有 LTR 方向包裹符号时不再重复添加
+        if ([self keepLtrTokenIsWrappedAtRange:range inText:text]) {
+            [result appendString:[text substringWithRange:range]];
+        } else {
+            [result appendString:RTLLEFTToRIGHTEmbedding];
+            [result appendString:[text substringWithRange:range]];
+            [result appendString:RTLPopDirectionalFormatting];
+        }
         cursor = NSMaxRange(range);
     }];
     if (cursor < text.length) {
         [result appendString:[text substringWithRange:NSMakeRange(cursor, text.length - cursor)]];
     }
     return [result copy];
+}
+
++ (NSDictionary<NSAttributedStringKey, id> *)sanitizedAttributesForDirectionMark:(NSDictionary<NSAttributedStringKey, id> *)attrs {
+    if (!attrs.count) {
+        return attrs;
+    }
+    NSMutableDictionary *sanitized = [attrs mutableCopy];
+    // 附件属性会让标记字符渲染成图片；链接属性会让标记字符变成可点击区域
+    [sanitized removeObjectForKey:NSAttachmentAttributeName];
+    [sanitized removeObjectForKey:NSLinkAttributeName];
+    return sanitized;
 }
 
 + (NSAttributedString *)rtlAttributedStringWithKeepLtrRegular:(NSAttributedString *)attrText {
@@ -233,11 +249,16 @@
         }
 
         NSAttributedString *matchedAttrText = [attrText attributedSubstringFromRange:range];
-        // 标记字符继承命中区间首字符的样式，只参与方向排版，不改变原有样式
-        NSDictionary *embedAttrs = [matchedAttrText attributesAtIndex:0 effectiveRange:NULL];
-        [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLLEFTToRIGHTEmbedding attributes:embedAttrs]];
-        [result appendAttributedString:matchedAttrText];
-        [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLPopDirectionalFormatting attributes:embedAttrs]];
+        if ([self keepLtrTokenIsWrappedAtRange:range inText:attrText.string]) {
+            // 命中区间已带 LTR 方向包裹，原样拷贝不再重复添加（样式不受影响）
+            [result appendAttributedString:matchedAttrText];
+        } else {
+            // 标记字符继承命中区间首字符的样式，只参与方向排版，不改变原有样式
+            NSDictionary *embedAttrs = [self sanitizedAttributesForDirectionMark:[matchedAttrText attributesAtIndex:0 effectiveRange:NULL]];
+            [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLLEFTToRIGHTEmbedding attributes:embedAttrs]];
+            [result appendAttributedString:matchedAttrText];
+            [result appendAttributedString:[[NSAttributedString alloc] initWithString:RTLPopDirectionalFormatting attributes:embedAttrs]];
+        }
         cursor = NSMaxRange(range);
     }];
     if (cursor < attrText.length) {
@@ -301,6 +322,82 @@
     return [text substringWithRange:NSMakeRange(start, end - start)];
 }
 
+/// 三种同方向（RTL）的成对包裹：RLI…PDI（隔离）、RLE…PDF（嵌入）、RLO…PDF（覆盖）。
+/// 只识别各自成对的形式（如 RLI…PDF 混配不视为已包裹），避免把残缺嵌套当成已处理
++ (BOOL)hasRTLDirectionWrap:(NSString *)text {
+    if (text.length < 2) {
+        return NO;
+    }
+    if ([text hasPrefix:RTLRIGHTToLEFTIsolate] && [text hasSuffix:RTLPopDirectionalIsolate]) {
+        return YES;
+    }
+    if ([text hasPrefix:RTLRIGHTToLEFTEmbedding] && [text hasSuffix:RTLPopDirectionalFormatting]) {
+        return YES;
+    }
+    if ([text hasPrefix:RTLRIGHTToLEFTOverride] && [text hasSuffix:RTLPopDirectionalFormatting]) {
+        return YES;
+    }
+    return NO;
+}
+
+/// 三种同方向（LTR）的成对包裹：LRI…PDI（隔离）、LRE…PDF（嵌入）、LRO…PDF（覆盖）。
+/// 同样只识别各自成对的形式
++ (BOOL)hasLTRDirectionWrap:(NSString *)text {
+    if (text.length < 2) {
+        return NO;
+    }
+    if ([text hasPrefix:RTLLEFTToRIGHTIsolate] && [text hasSuffix:RTLPopDirectionalIsolate]) {
+        return YES;
+    }
+    if ([text hasPrefix:RTLLEFTToRIGHTEmbedding] && [text hasSuffix:RTLPopDirectionalFormatting]) {
+        return YES;
+    }
+    if ([text hasPrefix:RTLLEFTToRIGHTOverride] && [text hasSuffix:RTLPopDirectionalFormatting]) {
+        return YES;
+    }
+    return NO;
+}
+
+/// keepLTR 命中 token 是否已带 LTR 方向包裹：
+/// token 自身成对包裹（正则把包裹符号也匹配进去的情况），
+/// 或紧贴 token 前后是 LRE/LRO…PDF、LRI…PDI（正则只命中包裹内内容的情况）
++ (BOOL)keepLtrTokenIsWrappedAtRange:(NSRange)range inText:(NSString *)text {
+    if ([self hasLTRDirectionWrap:[text substringWithRange:range]]) {
+        return YES;
+    }
+    if (range.location == 0 || NSMaxRange(range) >= text.length) {
+        return NO;
+    }
+    unichar prev = [text characterAtIndex:range.location - 1];
+    unichar next = [text characterAtIndex:NSMaxRange(range)];
+    BOOL pdfPair = (prev == [RTLLEFTToRIGHTEmbedding characterAtIndex:0] ||
+                    prev == [RTLLEFTToRIGHTOverride characterAtIndex:0]) &&
+                   next == [RTLPopDirectionalFormatting characterAtIndex:0];
+    BOOL isolatePair = prev == [RTLLEFTToRIGHTIsolate characterAtIndex:0] &&
+                       next == [RTLPopDirectionalIsolate characterAtIndex:0];
+    return pdfPair || isolatePair;
+}
+
++ (NSAttributedString *)removeDirectionMaskFromAttributedString:(NSAttributedString *)attrText {
+    if (!attrText || attrText.length == 0) {
+        return attrText;
+    }
+    // 无方向字符时直接返回原文，避免无谓的重建
+    if ([attrText.string rangeOfCharacterFromSet:[self directionMaskCharacterSet]].location == NSNotFound) {
+        return attrText;
+    }
+    NSMutableAttributedString *result = [[NSMutableAttributedString alloc] initWithString:@""];
+    // 按属性连续区间分段，去除段内方向字符后以原属性回填
+    [attrText enumerateAttributesInRange:NSMakeRange(0, attrText.length) options:0 usingBlock:^(NSDictionary<NSAttributedStringKey,id> * _Nonnull attrs, NSRange range, BOOL * _Nonnull stop) {
+        NSString *segment = [attrText.string substringWithRange:range];
+        NSString *cleanSegment = [self removeDirectionMask:segment];
+        if (cleanSegment.length > 0) {
+            [result appendAttributedString:[[NSAttributedString alloc] initWithString:cleanSegment attributes:attrs]];
+        }
+    }];
+    return [result copy];
+}
+
 + (NSRange)unmaskedRangeFromMaskedRange:(NSRange)maskedRange inMaskedText:(NSString *)maskedText {
     if (maskedText.length == 0) {
         return NSMakeRange(0, 0);
@@ -356,6 +453,25 @@
         rawIndex++;
     }
     return NSMakeRange(rawStart, rawIndex - rawStart);
+}
+
++ (NSRange)backspaceRangeForCaret:(NSUInteger)caretLocation inMaskedText:(NSString *)maskedText {
+    if (caretLocation == 0 || maskedText.length == 0) {
+        return NSMakeRange(0, 0);
+    }
+    NSCharacterSet *maskSet = [self directionMaskCharacterSet];
+    // 光标往前跨过紧贴的方向标记串
+    NSUInteger start = caretLocation;
+    while (start > 0 && [maskSet characterIsMember:[maskedText characterAtIndex:start - 1]]) {
+        start--;
+    }
+    if (start == 0) {
+        // 光标前全是标记（无可见字符）：退格无可删内容，按标准单字符退格处理
+        // （删除标记后归一化会补回/清空，视觉上无变化，与「文本开头退格无效果」的预期一致）
+        return NSMakeRange(caretLocation - 1, 1);
+    }
+    // 删除区间 = 前一个可见字符 + 其后至光标的标记串
+    return NSMakeRange(start - 1, caretLocation - (start - 1));
 }
 
 #pragma mark - Keep LTR Regular (Private)

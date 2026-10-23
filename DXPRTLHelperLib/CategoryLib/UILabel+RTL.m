@@ -24,19 +24,6 @@
     });
 }
 
-static const char RTLOriginTextStr = '\0';
-
-- (NSString *)RTLOriginText {
-    id originText = objc_getAssociatedObject(self, &RTLOriginTextStr);
-    return originText;
-}
-
-- (void)setRTLOriginText:(NSString *)originText {
-    if (self.RTLOriginText != originText) {
-        objc_setAssociatedObject(self, &RTLOriginTextStr, originText, OBJC_ASSOCIATION_RETAIN);
-    }
-}
-
 static const char RTLOriginAttributedTextStr = '\0';
 
 - (NSAttributedString *)RTLOriginAttributedText {
@@ -86,20 +73,15 @@ static const char RTLOriginAttributedTextStr = '\0';
     if (![RTLTools canDoRTLWork]) {
         return [self RTLText];  // 不需要RTL处理，返回原始文本
     }
-    
+
     // 优先处理 attributedText 的情况：返回原始 attributedString 的字符串
     if (self.RTLOriginAttributedText) {
         return self.RTLOriginAttributedText.string;
     }
 
-    // 如果 RTLOriginText 为空（比如 placeholder 等未通过 RTLSetText 设置的 UILabel）
-    // 需要直接调用原始方法获取当前显示的文本
-    if (!self.RTLOriginText || self.RTLOriginText.length == 0) {
-        return [self RTLText];
-    }
-
-    // 需要RTL处理时，返回保存的原始文本（不含方向标记）
-    return self.RTLOriginText;
+    // 存储文本带方向标记，读取时去除（NSString 无属性概念，边读边剥与原稿等价）；nil 保持 nil 语义
+    NSString *origin = [self RTLText];
+    return origin ? [RTLTools removeDirectionMask:origin] : origin;
 }
 
 - (void)RTLSetText:(NSString *)text {
@@ -110,7 +92,6 @@ static const char RTLOriginAttributedTextStr = '\0';
         [self RTLSetText:text];
         return;
     }
-    self.RTLOriginText = text;
     [self RTLSetText:RTL_WRAP_RTL([RTLTools rtlStringWithKeepLtrRegular:text])];
 }
 
@@ -129,38 +110,49 @@ static const char RTLOriginAttributedTextStr = '\0';
         [self RTLSetAttributedText:attributedText];
         return;
     }
-    self.RTLOriginAttributedText = attributedText;
+    // 外面传进来的内容可能已带方向字符，保存时统一去掉（保留其余属性样式），保证 getter 返回干净内容
+    self.RTLOriginAttributedText = [RTLTools removeDirectionMaskFromAttributedString:attributedText];
     NSRange attrsRange = NSMakeRange(0, attributedText.length);
     NSMutableAttributedString *newAttributeText = [[NSMutableAttributedString alloc] initWithString:attributedText.string];
+    // 段落样式存在但没显式对齐（natural，比如只设了行距）时，label 自身的 textAlignment 不再生效，
+    // 用视图当前对齐（已被 RTLSetTextAlignment: 翻转，RTL 坐标）兜底；
+    // 完全没有段落样式的区间不补：由 label 自身的 textAlignment 兜底，且新建段落会覆盖 lineBreakMode
+    NSTextAlignment viewAlignment = self.textAlignment == NSTextAlignmentNatural ? NSTextAlignmentRight : self.textAlignment;
     [attributedText enumerateAttributesInRange:attrsRange options:NSAttributedStringEnumerationLongestEffectiveRangeNotRequired usingBlock:^(NSDictionary<NSAttributedStringKey,id> * _Nonnull attrs, NSRange range, BOOL * _Nonnull stop) {
         NSMutableParagraphStyle *para = [[attrs valueForKey:NSParagraphStyleAttributeName] mutableCopy];
         NSMutableDictionary *newAttrs = [attrs mutableCopy];
         if (para) {
-            NSTextAlignment textAlignment = para.alignment;
-            switch (para.alignment) {
-                case NSTextAlignmentLeft:
-                    textAlignment = NSTextAlignmentRight;
-                    break;
-                case NSTextAlignmentRight:
-                    textAlignment = NSTextAlignmentLeft;
-                    break;
-                case NSTextAlignmentNatural:
-                    textAlignment = NSTextAlignmentRight;
-                    break;
-                default:
-                    break;
+            if (para.alignment == NSTextAlignmentNatural && viewAlignment != NSTextAlignmentNatural) {
+                // 没有显式对齐：视图对齐已是 RTL 坐标，直接使用，不再翻转
+                para.alignment = viewAlignment;
+            } else {
+                // 显式对齐是业务的设计时意图（LTR 坐标），需要翻转
+                NSTextAlignment textAlignment = para.alignment;
+                switch (para.alignment) {
+                    case NSTextAlignmentLeft:
+                        textAlignment = NSTextAlignmentRight;
+                        break;
+                    case NSTextAlignmentRight:
+                        textAlignment = NSTextAlignmentLeft;
+                        break;
+                    case NSTextAlignmentNatural:
+                        textAlignment = NSTextAlignmentRight;
+                        break;
+                    default:
+                        break;
+                }
+                para.alignment = textAlignment;
             }
-            para.alignment = textAlignment;
             [newAttrs setValue:para forKey:NSParagraphStyleAttributeName];
         }
         [newAttributeText addAttributes:newAttrs range:range];
     }];
     // 头部标记继承内容首字符的属性（含段落样式），避免裸插入字符抢占段落首个位置导致 alignment 失效
-    NSDictionary *headAttrs = newAttributeText.length > 0 ? [newAttributeText attributesAtIndex:0 effectiveRange:NULL] : nil;
+    NSDictionary *headAttrs = newAttributeText.length > 0 ? [RTLTools sanitizedAttributesForDirectionMark:[newAttributeText attributesAtIndex:0 effectiveRange:NULL]] : nil;
     NSAttributedString *rtlMark = [[NSAttributedString alloc] initWithString:RTLRIGHTToLEFTIsolate attributes:headAttrs];
     [newAttributeText insertAttributedString:rtlMark atIndex:0];
     // 尾部标记继承内容末字符的属性
-    NSDictionary *tailAttrs = newAttributeText.length > 0 ? [newAttributeText attributesAtIndex:newAttributeText.length - 1 effectiveRange:NULL] : nil;
+    NSDictionary *tailAttrs = newAttributeText.length > 0 ? [RTLTools sanitizedAttributesForDirectionMark:[newAttributeText attributesAtIndex:newAttributeText.length - 1 effectiveRange:NULL]] : nil;
     NSAttributedString *rtlEndMark = [[NSAttributedString alloc] initWithString:RTLPopDirectionalIsolate attributes:tailAttrs];
     [newAttributeText appendAttributedString:rtlEndMark];
     [self RTLSetAttributedText:[RTLTools rtlAttributedStringWithKeepLtrRegular:newAttributeText]];
